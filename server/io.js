@@ -9,7 +9,7 @@ const io = require('socket.io')({
 const jwt=require("./jwt");
 const store=require("./store");
 const util={
-  async login(user,socket,isReconnect) {
+  async login(user,socket,isReconnect,isSaveUser=true,currentUserSessionId= '') {
     let ip=socket.handshake.address.replace(/::ffff:/,"");
     const headers = socket.handshake.headers;
     const realIP = headers['x-forwarded-for'];
@@ -28,9 +28,15 @@ const util={
         user.id=socket.id;
         user.time=new Date().getTime();
         this.loginSuccess(user,socket);
-        store.saveUser(user,'login')
+        if (isSaveUser) {
+            store.saveUser(user,'login')
+        }
         const messages = await store.getMessages();
+        const userMessages = await store.getUserMessages();
         socket.emit("history-message","group_001",messages);
+        if(!isSaveUser){
+            socket.emit("history-user-message", currentUserSessionId,userMessages);
+        }
       }else {
         console.log(`登录失败,昵称<${user.name}>已存在!`)
         socket.emit('loginFail','登录失败,昵称已存在!')
@@ -46,6 +52,7 @@ const util={
     socket.on('message',(from, to,message,type)=> {
       if(to.type==='user'){
         socket.broadcast.to(to.roomId).emit('message', socket.user, to,message,type);
+        store.saveUserMessage(from,to,message,type)
       }
       if(to.type==='group'){
         socket.broadcast.emit('message', socket.user,to,message,type);
@@ -84,7 +91,8 @@ const util={
     ];
     const clients=await io.fetchSockets();
     clients.forEach((item) => {
-      if(item.user){
+        if(item.user){
+          console.log('item111--',item.user);
         users.push(item.user)
       }
     })
@@ -103,6 +111,7 @@ io.sockets.on('connection',(socket)=>{
     decode=jwt.decode(token);
   }
   let user=decode?decode.data:{};
+  console.log('user--:',user);
   socket.on("disconnect",(reason)=>{
     //判断是否是已登录用户
     if (socket.user&&socket.user.id) {
@@ -118,8 +127,11 @@ io.sockets.on('connection',(socket)=>{
     util.login(user,socket,true);
   }else {
     //监听用户登录事件
-    socket.on('login',(user)=>{
-      util.login(user,socket,false)
+    socket.on('login',(user,isSaveUser,currentUserSessionId)=>{
+        console.log('user--:',user);
+        console.log('isSaveUser--:', isSaveUser);
+        console.log('currentUserSessionId--:',currentUserSessionId);
+      util.login(user,socket,false,isSaveUser,currentUserSessionId)
     });
   }
 });

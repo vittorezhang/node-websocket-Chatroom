@@ -1,9 +1,11 @@
 const io=require("./io");
 const {getNetworkIPv4}=require("./utils");
 const express = require('express');
+const path = require('path');
 const app = express();
 const server = require('http').createServer(app);
-app.use("/",express.static('dist'));
+// app.use("/",express.static('dist'));
+app.use('/', express.static(path.join(__dirname, 'src')));
 app.use("/assets/images",express.static('upload'));
 const PORT=3000;
 io.attach(server);

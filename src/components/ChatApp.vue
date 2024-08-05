@@ -1,7 +1,7 @@
 <template>
   <div class="chat-app-warp">
-    <UserLogin v-if="!loginUser.id" @login="userLogin" :type="deviceType" v-drag></UserLogin>
-    <div class="app-main-panel ui-clear" v-drag v-if="loginUser.id&&deviceType==='pc'">
+    <UserLogin v-if="!loginUser.id && JSON.stringify(sessionUser) == '{}'" @login="userLogin" :type="deviceType" v-drag></UserLogin>
+    <div class="app-main-panel ui-clear" v-drag v-if="loginUser.id && isConnect &&deviceType==='pc'">
       <div class="app-aside-panel">
         <div class="app-user-avatar">
           <img :src="loginUser.avatarUrl" @mousedown.stop alt="" :title="loginUser.name">
@@ -97,8 +97,11 @@
               <li>
                 <span class="ui-label">消息时间</span>
                 <UiSwitch class="ui-right" v-model="setting.isTime"></UiSwitch>
-              </li>
-            </ul>
+              </li>              
+            </ul>            
+            <div class="logOut">
+                <button class="btn" @click="logOut()">退出登录</button>
+            </div>        
           </div>
         </div>
         <div class="app-container-panel" v-show="curMenu==='about'">
@@ -374,23 +377,38 @@
         audioSrc:BELL_URL,
         socketURL:window._HOST||'',
         socket:null,
-        isConnect:false
+        isConnect:false,
+        sessionUser: {}
       }
     },
-    mounted(){
+    mounted () {
+        this.sessionUser = JSON.parse(sessionStorage.getItem('sessionUser') || '{}')
       this.initSocket();
     },
     methods:{
+        logOut () {                        
+            sessionStorage.setItem('sessionUser', '{}')
+            Message.success('退出登录成功');
+            location?.reload() 
+        },
       searchUser(keyword){
+        console.log('--this.users--',this.users);
+        
         let arr=[];
         this.users.forEach( (item )=>{
           if((item.name.indexOf(keyword)!==-1)||(item.id.indexOf(keyword)!==-1)){
             arr.push(item)
           }
+          if(item.type == 'user'){
+            sessionStorage.getItem('')
+          }
         });
         return arr;
       },
       getMessages(sessionId){
+        console.log({sessionId});
+        console.log('this.messageData',this.messageData);
+        
         if(sessionId&&this.messageData[sessionId]){
           return this.messageData[sessionId];
         }
@@ -446,6 +464,8 @@
         }
       },
       changeSession(session){
+        console.log('changeSession:',session);
+        sessionStorage.setItem('currentUserSessionId',session.id)       
         const vm=this;
         if(session.id===this.curSession.id){
           return
@@ -465,7 +485,8 @@
         if (!this.socket){
           user.time=new Date().getTime()
           this.loginUser=user;
-        }else {
+        } else {
+          sessionStorage.setItem('sessionUser',JSON.stringify(user || '{}'));
           this.socket.emit('login',user)
         }
       },
@@ -502,12 +523,16 @@
         _this.socket.on("connect",(data)=>{
           this.isConnect=true;
           console.log("链接成功！",data)
+            if (_this.socket && JSON.stringify(this.sessionUser) != '{}') {
+                _this.socket.emit('login',this.sessionUser,false,sessionStorage.getItem('currentUserSessionId') || '')
+            }  
         })
-        _this.socket.on("loginSuccess",_this.loginSuccess);
+          _this.socket.on("loginSuccess", _this.loginSuccess);          
         _this.socket.on("loginFail",_this.loginFail);
         _this.socket.on("message",_this.listenerMessage);
         _this.socket.on("system",_this.listenerSystem);
         _this.socket.on("history-message",_this.listenerHistoryMessage);
+        _this.socket.on("history-user-message",_this.listenerUserHistoryMessage);
       },
       addUser(user){
         let index=-1;
@@ -523,10 +548,13 @@
         }
       },
       loginSuccess(data,users){
+        console.log('loginSuccess--data.user',data.user);
+        console.log('loginSuccess--user',users);
         const _this=this;
         _this.loginUser=data.user;
         _this.token=data.token;
         _this.users=users;
+        // sessionStorage.setItem('currentUserSessionId',session.id)
       },
       loginFail(message){
         Message.error(message);
@@ -567,6 +595,12 @@
         }
       },
       listenerHistoryMessage(channelId,msgList){
+        const _this=this;
+        _this.$set(_this.messageData,channelId,msgList)
+      },
+      listenerUserHistoryMessage(channelId,msgList){
+        console.log({channelId,msgList});
+        
         const _this=this;
         _this.$set(_this.messageData,channelId,msgList)
       },
@@ -861,6 +895,17 @@
     -webkit-box-shadow: inset 0 0 6px rgba(236, 236, 236, 0.3);
     background-color: rgba(203, 203, 203, 0.54);
     transition: all 0.5s;
+  }
+  .logOut{
+    margin: 12px;
+    text-align: center;
+    width: 60%;
+    .btn{
+        border: 1px solid #e7e7e7;
+        height: 30px;
+        line-height: 30px;
+        background: #f5f3f3;
+    }
   }
 </style>
 <style scoped lang="less">
